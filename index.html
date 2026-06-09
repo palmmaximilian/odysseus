@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Odysseus — anatomy of a viral fork</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="data.js"></script>
+<style>
+  :root{
+    --bg:#0c0d10; --panel:#15171c; --panel2:#1b1e25; --border:#262a33;
+    --fg:#e8e6e1; --muted:#8b8f99; --red:#ff4d4d; --green:#2bd47d;
+    --blue:#5aa9ff; --amber:#ffb454; --violet:#b78bff;
+    --mono:"Fira Code",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#f7f7f4; --panel:#ffffff; --panel2:#eeeeea; --border:#dcdcd4;
+    --fg:#1a1c20; --muted:#5a5f6a; --red:#d83b3b; --green:#199b5a;
+    --blue:#2f6fd0; --amber:#b3760f; --violet:#7a4fd0;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);
+    line-height:1.6;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
+  a{color:var(--red)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+
+  .themebtn{position:fixed;top:16px;right:16px;z-index:50;width:40px;height:40px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    background:var(--panel);border:1px solid var(--border);border-radius:9px;color:var(--fg)}
+  .themebtn:hover{border-color:var(--muted)}
+  .themebtn svg{width:18px;height:18px}
+  .themebtn .moon{display:none} html[data-theme="light"] .themebtn .moon{display:block}
+  html[data-theme="light"] .themebtn .sun{display:none}
+  .updated{color:var(--muted);font-size:12px;margin-top:18px;letter-spacing:.04em}
+  .updated b{color:var(--fg)}
+
+  header.hero{padding:90px 0 50px;border-bottom:1px solid var(--border)}
+  .kicker{color:var(--red);letter-spacing:.32em;text-transform:uppercase;font-size:12px;margin-bottom:18px}
+  h1{font-size:clamp(34px,6vw,62px);line-height:1.04;margin:0 0 22px;font-weight:700;letter-spacing:-.02em}
+  h1 em{color:var(--muted);font-style:normal}
+  .lede{color:var(--muted);max-width:680px;font-size:17px}
+  .lede b{color:var(--fg);font-weight:600}
+
+  .statband{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);
+    border:1px solid var(--border);margin:46px 0 0;border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:20px 18px}
+  .stat .n{font-size:30px;font-weight:700;letter-spacing:-.02em}
+  .stat .n.red{color:var(--red)} .stat .n.green{color:var(--green)} .stat .n.blue{color:var(--blue)} .stat .n.amber{color:var(--amber)}
+  .stat .l{color:var(--muted);font-size:12px;margin-top:4px}
+
+  section{padding:64px 0;border-bottom:1px solid var(--border)}
+  .tag{color:var(--red);font-size:12px;letter-spacing:.28em;text-transform:uppercase;margin-bottom:10px}
+  h2{font-size:clamp(24px,3.4vw,34px);margin:0 0 14px;letter-spacing:-.01em}
+  .note{color:var(--muted);max-width:720px;margin-bottom:30px}
+  .note b{color:var(--fg)}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px 20px 14px}
+  .chartbox{position:relative;height:340px}
+  .chartbox.tall{height:420px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .pull{border-left:3px solid var(--red);padding:6px 0 6px 18px;margin:26px 0;color:var(--fg);font-size:18px}
+  .pull b{color:var(--red)}
+
+  .big2{display:grid;grid-template-columns:auto 1fr;gap:34px;align-items:center}
+  .megastat .n{font-size:64px;font-weight:700;line-height:1;letter-spacing:-.03em}
+  .megastat .n .vs{color:var(--muted);font-size:34px}
+  .megastat .l{color:var(--muted);font-size:13px;margin-top:8px;max-width:230px}
+
+  footer{padding:50px 0 90px;color:var(--muted);font-size:13px}
+  .meth{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-top:22px;font-size:13px;color:var(--muted)}
+  .meth b{color:var(--fg)}
+  code{background:var(--panel2);padding:1px 6px;border-radius:4px;color:var(--amber)}
+  @media(max-width:760px){.statband{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}.big2{grid-template-columns:1fr;gap:18px}}
+</style>
+</head>
+<body>
+<button class="themebtn" id="themebtn" title="Toggle light / dark" aria-label="Toggle theme">
+  <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+  <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+</button>
+<div class="wrap">
+  <header class="hero">
+    <div class="kicker">A social autopsy of an open-source repo</div>
+    <h1>The shape of a<br><em>viral fork's</em> first days.</h1>
+    <p class="lede">Days after it launched, Odysseus drew a flood of pull requests from
+    <b id="h-contrib"></b> contributors. These charts describe that flood — <b>who shows up</b>,
+    <b>what gets merged</b>, and how the project's commit conventions shifted early on. Every figure is computed
+    from the public GitHub API and git history; the snapshot refreshes on a schedule.</p>
+    <div class="statband" id="statband"></div>
+    <p class="updated" id="updated"></p>
+  </header>
+
+  <section>
+    <div class="tag">01 — The stream</div>
+    <h2>The pull-request firehose</h2>
+    <p class="note">Daily pull requests <b style="color:var(--blue)">opened</b>,
+      <b style="color:var(--green)">merged</b>, and <b style="color:var(--red)">closed without merging</b> —
+      the gap between what arrives and what lands.</p>
+    <div class="card"><div class="chartbox tall"><canvas id="streamChart"></canvas></div></div>
+    <div class="pull"><span id="p-open"></span></div>
+  </section>
+
+  <section>
+    <div class="tag">02 — What survives</div>
+    <h2>PR mortality</h2>
+    <p class="note">Of every pull request that got a <b>decision</b> (merged or closed), what share was
+      <b style="color:var(--red)">closed without merging</b>? Grouped by the day each PR was filed.</p>
+    <div class="grid2">
+      <div class="card"><div class="chartbox"><canvas id="mortChart"></canvas></div></div>
+      <div class="card" style="display:flex;align-items:center">
+        <div class="megastat">
+          <div class="n red" id="m-mortality"></div>
+          <div class="l">of all <b style="color:var(--fg)">decided</b> PRs were closed without merging.
+            The rest of the inbox is still <span id="m-openshare"></span> waiting in limbo.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="tag">03 — Who actually contributes</div>
+    <h2>A handful do most of it</h2>
+    <p class="note">Contribution is wildly unequal. The <b>Lorenz curve</b> bows away from the line of equality;
+      the <b>Gini coefficient</b> puts a single number on it (0 = everyone equal, 1 = one person does everything).</p>
+    <div class="grid2">
+      <div class="card"><div class="chartbox"><canvas id="topChart"></canvas></div></div>
+      <div class="card"><div class="chartbox"><canvas id="lorenzChart"></canvas></div></div>
+    </div>
+    <div class="pull">Gini of PRs-opened: <b id="p-gini"></b>. The top contributor opened
+      <b id="p-top"></b> PRs, <b id="p-toprate"></b> of them merged.</div>
+  </section>
+
+  <section>
+    <div class="tag">04 — The creator</div>
+    <h2>How the maintainer works</h2>
+    <p class="note">The repo owner contributes differently from everyone else. Counting direct commits to the
+      tracked branches against pull requests opened, in this snapshot the split looks like this.</p>
+    <div class="card big2">
+      <div class="megastat">
+        <div class="n"><span class="amber" id="c-commits"></span><span class="vs"> / </span><span class="red" id="c-prs"></span></div>
+        <div class="l">direct commits <b style="color:var(--fg)">vs</b> pull requests opened, by the maintainer,
+          in this snapshot.</div>
+      </div>
+      <div class="chartbox" style="height:240px"><canvas id="maintChart"></canvas></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="tag">05 — Chaos → order</div>
+    <h2>The project learns a grammar</h2>
+    <p class="note">A measurable trace of convention: the share of new PRs and commits following the
+      <code>type(scope): subject</code> format, by day. Alongside it, the mix of PR <b>types</b> — how much of
+      the work is <b style="color:var(--red)">fixes</b> versus <b style="color:var(--green)">features</b>.</p>
+    <div class="grid2">
+      <div class="card"><div class="chartbox"><canvas id="convChart"></canvas></div></div>
+      <div class="card"><div class="chartbox"><canvas id="typeChart"></canvas></div></div>
+    </div>
+    <div class="pull"><b id="p-fixfeat"></b> as many <code>fix</code> PRs as <code>feat</code> PRs in this snapshot.</div>
+  </section>
+
+  <section>
+    <div class="tag">06 — The conversation</div>
+    <h2>Issues: demand vs triage</h2>
+    <p class="note">Issues <b style="color:var(--blue)">opened</b> vs <b style="color:var(--green)">closed</b> per day —
+      the pressure of user demand against the maintainer's triage throughput.</p>
+    <div class="card"><div class="chartbox"><canvas id="issuesChart"></canvas></div></div>
+  </section>
+
+  <footer>
+    <div><b style="color:var(--fg)">Odysseus social autopsy.</b> Generated from
+      <code id="f-repo"></code> — <span id="f-counts"></span>.</div>
+    <div class="meth">
+      <b>Method.</b> Pull requests &amp; issues pulled from the public GitHub API (<code>gh</code>); commits from
+      <code>git log --all</code> of the upstream repo. Refreshed daily by a GitHub Action.
+      "Decided" = merged or closed-unmerged (open PRs excluded from mortality).
+      Convention = title/subject matching <code>(feat|fix|docs|refactor|test|chore|ci|perf|build|style|revert)(scope)!: </code>.
+      Gini computed on the per-contributor distribution of PRs opened. Maintainer =
+      <code id="f-maint">pewdiepie-archdaemon</code>. Snapshot is a single point in time; counts drift as the repo moves.
+    </div>
+  </footer>
+</div>
+
+<script>
+const D = window.DATA, M = D.meta;
+Chart.defaults.font.family = "'Fira Code',ui-monospace,monospace";
+Chart.defaults.font.size = 11;
+const fmt = n => n==null?'—':n.toLocaleString();
+const pct = n => n==null?'—':(n*100).toFixed(0)+'%';
+const fade = (hex,a)=>{const h=hex.replace('#','');const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return `rgba(${r},${g},${b},${a})`;};
+
+// theme-dependent palette (mirrors the CSS variables)
+function palette(theme){
+  return theme==='light'
+    ? {fg:'#1a1c20',muted:'#5a5f6a',grid:'#e2e4e8',panel:'#ffffff',red:'#d83b3b',green:'#199b5a',blue:'#2f6fd0',amber:'#b3760f',violet:'#7a4fd0'}
+    : {fg:'#e8e6e1',muted:'#8b8f99',grid:'#21242c',panel:'#15171c',red:'#ff4d4d',green:'#2bd47d',blue:'#5aa9ff',amber:'#ffb454',violet:'#b78bff'};
+}
+
+// ---- static text (theme-independent, fill once) ----
+document.getElementById('h-contrib').textContent = fmt(M.contributorCount);
+const sb = [
+  ['n',fmt(M.totalPRs),'pull requests'],
+  ['green',fmt(M.merged),'merged'],
+  ['red',pct(M.mortalityOfDecided),'of decisions = closed unmerged'],
+  ['amber',fmt(M.contributorCount),'distinct contributors'],
+];
+document.getElementById('statband').innerHTML = sb.map(([c,n,l])=>
+  `<div class="stat"><div class="n ${c}">${n}</div><div class="l">${l}</div></div>`).join('');
+document.getElementById('p-open').textContent = `${fmt(M.open)} PRs are open in this snapshot — ${pct(M.openShare)} of everything ever filed.`;
+document.getElementById('m-mortality').textContent = pct(M.mortalityOfDecided);
+document.getElementById('m-openshare').innerHTML = `<b style="color:var(--amber)">${fmt(M.open)} PRs</b>`;
+document.getElementById('p-gini').textContent = M.gini;
+document.getElementById('p-top').textContent = `${fmt(M.topContributorPRs)} (@${M.topContributor})`;
+document.getElementById('p-toprate').textContent = pct(D.contributors[0].mergeRate);
+document.getElementById('c-commits').textContent = fmt(M.maintainerCommits);
+document.getElementById('c-prs').textContent = fmt(M.maintainerPRs);
+const fixfeat = (D.types.find(t=>t.type==='fix')?.count||0)/(D.types.find(t=>t.type==='feat')?.count||1);
+document.getElementById('p-fixfeat').textContent = fixfeat.toFixed(1)+'×';
+document.getElementById('f-repo').textContent = M.repo;
+document.getElementById('f-counts').textContent = `${fmt(M.totalPRs)} PRs, ${fmt(M.totalIssues)} issues, ${fmt(M.totalCommits)} commits`;
+// last updated
+if(M.generated){
+  const g = M.generated.replace('T',' ').replace(/:\d\d(\.\d+)?(Z|[+-]\d\d:?\d\d)?$/,' UTC');
+  document.getElementById('updated').innerHTML = `Snapshot generated <b>${g}</b> · refreshes on a daily schedule`;
+}
+
+// ---- charts (rebuilt on theme change) ----
+let charts = [];
+function renderCharts(theme){
+  const C = palette(theme);
+  Chart.defaults.color = C.muted;
+  charts.forEach(c=>c.destroy()); charts = [];
+  const baseAxes = (xtitle)=>({
+    x:{grid:{color:C.grid},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8},title:{display:!!xtitle,text:xtitle,color:C.muted}},
+    y:{grid:{color:C.grid},beginAtZero:true}
+  });
+  const leg = {labels:{usePointStyle:true,boxWidth:7,padding:14,color:C.fg}};
+  const sub = t=>({display:true,text:t,color:C.muted,padding:{bottom:8}});
+  const mk = (id,cfg)=>charts.push(new Chart(document.getElementById(id),cfg));
+
+  // 01 stream
+  const sd = D.prDaily;
+  mk('streamChart',{type:'line',data:{labels:sd.map(d=>d.date),datasets:[
+    {label:'opened',data:sd.map(d=>d.opened),borderColor:C.blue,backgroundColor:fade(C.blue,.10),fill:true,borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:C.blue},
+    {label:'merged',data:sd.map(d=>d.merged),borderColor:C.green,backgroundColor:'transparent',borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:C.green},
+    {label:'closed unmerged',data:sd.map(d=>d.closed),borderColor:C.red,backgroundColor:'transparent',borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:C.red},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:leg,tooltip:{callbacks:{title:i=>i[0].label}},subtitle:sub('PRs per day (event date)')},scales:baseAxes()}});
+
+  // 02 mortality
+  const coh = D.prCohortDaily.filter(w=>w.mergeRate!=null);
+  mk('mortChart',{type:'line',data:{labels:coh.map(w=>w.date),datasets:[
+    {label:'closed unmerged %',data:coh.map(w=>+((1-w.mergeRate)*100).toFixed(1)),borderColor:C.red,backgroundColor:fade(C.red,.14),fill:true,borderWidth:2,tension:.3,pointRadius:3,pointBackgroundColor:C.red},
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},subtitle:sub('of PRs filed that day, share later closed unmerged')},
+    scales:{x:baseAxes().x,y:{...baseAxes().y,ticks:{callback:v=>v+'%'},suggestedMax:100}}}});
+
+  // 03a top contributors
+  const tc = D.contributors.slice(0,15);
+  mk('topChart',{type:'bar',data:{labels:tc.map(c=>'@'+c.login),datasets:[
+    {label:'merged',data:tc.map(c=>c.merged),backgroundColor:C.green,stack:'s'},
+    {label:'closed',data:tc.map(c=>c.closed),backgroundColor:C.red,stack:'s'},
+    {label:'still open',data:tc.map(c=>c.opened-c.merged-c.closed),backgroundColor:C.grid,stack:'s'},
+  ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:leg,subtitle:sub('top 15 by PRs opened')},
+    scales:{x:{stacked:true,grid:{color:C.grid},beginAtZero:true},y:{stacked:true,grid:{display:false}}}}});
+
+  // 03b lorenz
+  const lz = D.lorenz;
+  mk('lorenzChart',{type:'line',data:{labels:lz.map(p=>(p.p*100).toFixed(0)+'%'),datasets:[
+    {label:'actual',data:lz.map(p=>+(p.share*100).toFixed(1)),borderColor:C.violet,backgroundColor:fade(C.violet,.12),fill:true,borderWidth:2,tension:.2,pointRadius:0},
+    {label:'perfect equality',data:lz.map(p=>+(p.p*100).toFixed(1)),borderColor:C.muted,borderDash:[5,5],borderWidth:1,pointRadius:0,fill:false},
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:leg,subtitle:sub(`Lorenz curve · Gini = ${M.gini}`)},
+    scales:{x:{grid:{color:C.grid},title:{display:true,text:'cumulative % of contributors',color:C.muted}},
+      y:{grid:{color:C.grid},title:{display:true,text:'cumulative % of PRs',color:C.muted},ticks:{callback:v=>v+'%'}}}}});
+
+  // 04 maintainer daily commits
+  const cw = D.commitDaily;
+  mk('maintChart',{type:'bar',data:{labels:cw.map(w=>w.date),datasets:[
+    {label:'maintainer',data:cw.map(w=>w.maint),backgroundColor:C.amber,stack:'c'},
+    {label:'everyone else',data:cw.map(w=>w.total-w.maint),backgroundColor:C.grid,stack:'c'},
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:leg,subtitle:sub('direct commits/day to tracked branches')},
+    scales:{x:{stacked:true,grid:{color:C.grid},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:6}},y:{stacked:true,grid:{color:C.grid},beginAtZero:true}}}});
+
+  // 05a convention adoption
+  const cv = D.prCohortDaily.filter(w=>w.convRate!=null);
+  const cvc = D.commitDaily.filter(w=>w.convRate!=null);
+  mk('convChart',{type:'line',data:{labels:cv.map(w=>w.date),datasets:[
+    {label:'new PRs',data:cv.map(w=>+(w.convRate*100).toFixed(1)),borderColor:C.green,backgroundColor:fade(C.green,.12),fill:true,borderWidth:2,tension:.3,pointRadius:3,pointBackgroundColor:C.green},
+    {label:'commits',data:cvc.map(w=>+(w.convRate*100).toFixed(1)),borderColor:C.blue,backgroundColor:'transparent',borderWidth:2,borderDash:[4,4],tension:.3,pointRadius:0},
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:leg,subtitle:sub('share following type(scope): grammar, by day filed')},
+    scales:{x:baseAxes().x,y:{...baseAxes().y,ticks:{callback:v=>v+'%'},suggestedMax:100}}}});
+
+  // 05b types
+  const ty = D.types;
+  const tcolors={fix:C.red,feat:C.green,docs:C.blue,refactor:C.violet,ci:C.amber,chore:C.muted,test:'#3aa0a0',perf:'#d06bd0',build:'#7a8',style:'#888'};
+  mk('typeChart',{type:'doughnut',data:{labels:ty.map(t=>t.type),datasets:[
+    {data:ty.map(t=>t.count),backgroundColor:ty.map(t=>tcolors[t.type]||C.grid),borderColor:C.panel,borderWidth:2},
+  ]},options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+    plugins:{legend:{position:'right',labels:{usePointStyle:true,boxWidth:7,padding:10,color:C.fg}},subtitle:sub('PR types by conventional prefix')}}});
+
+  // 06 issues
+  const idd = D.issuesDaily;
+  mk('issuesChart',{type:'line',data:{labels:idd.map(d=>d.date),datasets:[
+    {label:'opened',data:idd.map(d=>d.opened),borderColor:C.blue,backgroundColor:fade(C.blue,.10),fill:true,borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:C.blue},
+    {label:'closed',data:idd.map(d=>d.closed),borderColor:C.green,backgroundColor:'transparent',borderWidth:2.5,tension:.35,pointRadius:3,pointBackgroundColor:C.green},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:leg,subtitle:sub('issues per day (event date)')},scales:baseAxes()}});
+}
+
+// ---- theme init + toggle ----
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  try{localStorage.setItem('sv-theme', t);}catch(e){}
+  renderCharts(t);
+}
+let theme = 'dark';
+try{ theme = localStorage.getItem('sv-theme') || 'dark'; }catch(e){}
+applyTheme(theme);
+document.getElementById('themebtn').addEventListener('click', ()=>{
+  theme = (document.documentElement.getAttribute('data-theme')==='light') ? 'dark' : 'light';
+  applyTheme(theme);
+});
+</script>
+</body>
+</html>
